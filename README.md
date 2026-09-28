@@ -35,13 +35,13 @@ cameras:
       fps: 5
 ```
 
-示例按出厂默认 VGA 编写；本次测试板仍保存 SVGA，接入时应将宽高改为 800×600。选择其他分辨率时请同步调整检测宽高。转换 H.264 会消耗 Frigate 主机的计算资源。视频 HTTP 地址目前不要求密码，只应在可信任局域网内使用。参见 [Frigate 官方 MJPEG 接入说明](https://docs.frigate.video/configuration/camera_specific/#mjpeg-cameras)。
+示例按出厂默认 VGA 编写；选择 SVGA 时请将检测宽高改为 800×600，选择 UXGA 时改为 1600×1200，其他分辨率同理。转换 H.264 会消耗 Frigate 主机的计算资源。视频 HTTP 地址目前不要求密码，只应在可信任局域网内使用。参见 [Frigate 官方 MJPEG 接入说明](https://docs.frigate.video/configuration/camera_specific/#mjpeg-cameras)。
 
 ## 已完成的实测
 
 本板识别 OV2640 和 8 MB PSRAM。此前在独立热点测得 **251 个完整 JPEG 帧 / 10 秒，约 25 FPS**（VGA、质量 14）。
 
-深度排查发现：20 MHz 摄像头外部时钟启动后，STA 网络失联；释放驱动但保留该时钟时仍失联；显式关闭时钟后恢复约 1.09 MB/s。软件将外部时钟降到 8 MHz 后恢复网络。进一步逐档测试后，正式固件使用约 **9.41 MHz XCLK** 和 OV2640 内部时钟倍频。当前保存的 **SVGA、质量 16** 设置下，重启后在局域网连续 120 秒收到 **2824 个完整 JPEG 帧（23.53 FPS，0 坏帧）**。视频发送期间配置页 HTTP 200、0.06 秒返回，30 次 ping 全通，平均 9 ms。原因和完整对照数据见 [NETWORK-DIAGNOSIS.md](NETWORK-DIAGNOSIS.md)。
+深度排查发现：20 MHz 摄像头外部时钟启动后，STA 网络失联；释放驱动但保留该时钟时仍失联；显式关闭时钟后恢复约 1.09 MB/s。软件将外部时钟降到 8 MHz 后恢复网络。进一步逐档测试后，正式固件使用约 **9.41 MHz XCLK** 和 OV2640 内部时钟倍频。在当时保存的 **SVGA、质量 16** 设置下，重启后在局域网连续 120 秒收到 **2824 个完整 JPEG 帧（23.53 FPS，0 坏帧）**。视频发送期间配置页 HTTP 200、0.06 秒返回，30 次 ping 全通，平均 9 ms。原因和完整对照数据见 [NETWORK-DIAGNOSIS.md](NETWORK-DIAGNOSIS.md)。
 
 MJPEG 地址已验证；Frigate/go2rtc 端到端接入尚未实测。
 
@@ -56,7 +56,18 @@ MJPEG 地址已验证；Frigate/go2rtc 端到端接入尚未实测。
 | SXGA | 1280×1024 | 141 / 12.00 秒 | 11.75 FPS | 0 |
 | UXGA | 1600×1200 | 140 / 12.02 秒 | 11.65 FPS | 0 |
 
-这些是本板在当前场景和网络下的短时实测值。高分辨率下的帧率约为当前 SVGA 23.5 FPS 的一半；场景复杂度、光线、JPEG 质量和网络都会改变结果。可用 `python tools/benchmark_resolutions.py --host CAMERA_IP --port COM8 --seconds 12` 复测；该脚本从串口读取设备当前管理密码且不输出密码，依次测试并恢复原分辨率。没有串口时可省略 `--port`，手动输入密码。
+这些是本板在当时场景和网络下的短时实测值。高分辨率下的帧率约为此前 SVGA 23.5 FPS 的一半；场景复杂度、光线、JPEG 质量和网络都会改变结果。可用 `python tools/benchmark_resolutions.py --host CAMERA_IP --port COM8 --seconds 12` 复测；该脚本从串口读取设备当前管理密码且不输出密码，依次测试并恢复原分辨率。没有串口时可省略 `--port`，手动输入密码。
+
+### UDP 传输探索
+
+为了检查 HTTP/TCP 是否限制帧率，曾临时刷入探针固件，对同一块板子分别测试只从摄像头取帧、ESP-IDF/lwIP UDP 发送 JPEG 分片、现有 HTTP MJPEG。接收端按帧编号和偏移重组 JPEG，统计完整帧；每项约 12 秒，JPEG 质量 12。探针并未手写 IP/UDP 协议栈，也未加入正式固件。
+
+| 分辨率 | 只取帧 | UDP 完整接收 | HTTP 完整接收 |
+|---|---:|---:|---:|
+| SVGA 800×600 | 284 帧，23.66 FPS | 283 帧，23.46 FPS | 282 帧，23.50 FPS |
+| UXGA 1600×1200 | 143 帧，11.84 FPS | 59 帧，4.89 FPS | 139 帧，11.58 FPS |
+
+SVGA 下 HTTP 已非常接近摄像头取帧上限。UXGA 下，UDP 探针记录到 143 帧中有 84 帧发送不完整；这种无重传的分片流只要丢一个包就损失整张 JPEG。调整发送重试后依然如此。自定义 UDP 还需常驻接收及转发程序才能供 Frigate 使用；若使用标准 RTP/JPEG，则需实现 [RFC 2435](https://www.rfc-editor.org/info/rfc2435/) 的封包和会话描述，再由兼容的接收器接入。[go2rtc 支持格式](https://github.com/alexxit/go2rtc/blob/master/pkg/README.md)不包括直接读取本探针的自定义 UDP 包。当前没有证据表明这会提高本板的完整视频帧率，因此配置页未增加 UDP 切换。这个结果不代表所有网络条件下 UDP 的延迟都相同。
 
 ## 卡顿现象与原因判断
 

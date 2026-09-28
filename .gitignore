@@ -11,6 +11,8 @@ sdkconfig.goouuu_s3_cam
 *.bin
 __pycache__/
 *.pyc
+tools/udp_probe.py
+tools/udp_svga_compare.py
 *.diag-backup
 *.deep-backup
 *.clock-sweep-backup
