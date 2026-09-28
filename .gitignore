@@ -13,6 +13,7 @@ __pycache__/
 *.pyc
 tools/udp_probe.py
 tools/udp_svga_compare.py
+tools/high_clock_probe.py
 *.diag-backup
 *.deep-backup
 *.clock-sweep-backup

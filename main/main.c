@@ -128,7 +128,7 @@ static void init_camera(void)
         .pin_vsync = 6,
         .pin_href = 7,
         .pin_pclk = 13,
-        .xclk_freq_hz = 9411764,
+        .xclk_freq_hz = 12000000,
         .ledc_timer = LEDC_TIMER_0,
         .ledc_channel = LEDC_CHANNEL_0,
         .pixel_format = PIXFORMAT_JPEG,
@@ -145,14 +145,15 @@ static void init_camera(void)
     }
     sensor_t *sensor = esp_camera_sensor_get();
     if (sensor) {
-        // OV2640 sensor bank CLKRC bit 7 doubles the internal clock.
-        // Keep the external XCLK below the measured STA failure range.
+        // CLKRC bit 7 doubles the OV2640 internal clock to about 24 MHz.
         if (sensor->id.PID == OV2640_PID && sensor->set_reg(sensor, 0x111, 0x80, 0x80) != 0) {
             ESP_LOGW(TAG, "OV2640 clock doubling failed; using base clock");
         }
         sensor->set_hmirror(sensor, s_config.mirror);
         sensor->set_vflip(sensor, s_config.flip);
     }
+    // This board kept its STA link responsive at 12 MHz with the weakest XCLK drive.
+    ESP_ERROR_CHECK(gpio_set_drive_capability(GPIO_NUM_15, GPIO_DRIVE_CAP_0));
     s_camera_ok = true;
     ESP_LOGI(TAG, "Camera ready: %s, JPEG quality %u", s_config.resolution, s_config.quality);
 }
