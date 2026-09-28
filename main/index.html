@@ -44,10 +44,10 @@
       <input id="adminPassword" type="password" minlength="8" maxlength="16" autocomplete="new-password" placeholder="留空则保持当前密码">
       <p class="muted">新刷机默认密码为 <code>ESPVsetup123</code>，可用于连接配置热点及保存设置。首次配置后建议修改；旧设备已保存的密码不受更新影响。</p>
       <div class="row">
-        <div><label for="resolution">分辨率</label><select id="resolution"><option value="qvga">QVGA 320×240（帧率优先）</option><option value="vga">VGA 640×480（推荐）</option><option value="svga">SVGA 800×600（细节优先）</option></select></div>
+        <div><label for="resolution">分辨率</label><select id="resolution"><option value="qvga">QVGA 320×240</option><option value="vga">VGA 640×480</option><option value="svga">SVGA 800×600（已验证流畅）</option><option value="xga">XGA 1024×768</option><option value="hd">HD 1280×720（16:9）</option><option value="sxga">SXGA 1280×1024</option><option value="uxga">UXGA 1600×1200（最高分辨率）</option></select></div>
         <div><label for="quality">JPEG 质量：<span id="qualityValue">14</span></label><input id="quality" type="range" min="8" max="30" value="14"></div>
       </div>
-      <p class="muted">JPEG 数值越小，画质越高，数据量也可能越大。</p>
+      <p class="muted">JPEG 数值越小，画质越高，数据量也可能越大。高分辨率通常会降低帧率，修改后设备会重启。</p>
       <label class="check"><input id="mirror" type="checkbox">水平镜像</label>
       <label class="check"><input id="flip" type="checkbox">上下翻转</label>
       <p><button id="saveButton" type="submit">保存并重启</button></p>

@@ -60,6 +60,17 @@ static void load_string(nvs_handle_t nvs, const char *key, char *dst, size_t cap
     }
 }
 
+static bool resolution_supported(const char *resolution)
+{
+    return strcmp(resolution, "qvga") == 0 ||
+           strcmp(resolution, "vga") == 0 ||
+           strcmp(resolution, "svga") == 0 ||
+           strcmp(resolution, "xga") == 0 ||
+           strcmp(resolution, "hd") == 0 ||
+           strcmp(resolution, "sxga") == 0 ||
+           strcmp(resolution, "uxga") == 0;
+}
+
 static void load_config(void)
 {
     nvs_handle_t nvs;
@@ -68,9 +79,7 @@ static void load_config(void)
     load_string(nvs, "wifi_pass", s_config.wifi_password, sizeof(s_config.wifi_password));
     load_string(nvs, "admin", s_config.admin_key, sizeof(s_config.admin_key));
     load_string(nvs, "res", s_config.resolution, sizeof(s_config.resolution));
-    if (strcmp(s_config.resolution, "qvga") != 0 &&
-        strcmp(s_config.resolution, "vga") != 0 &&
-        strcmp(s_config.resolution, "svga") != 0) {
+    if (!resolution_supported(s_config.resolution)) {
         strcpy(s_config.resolution, "vga");
     }
     uint8_t quality;
@@ -93,6 +102,10 @@ static framesize_t frame_size_for(const char *resolution)
 {
     if (strcmp(resolution, "qvga") == 0) return FRAMESIZE_QVGA;
     if (strcmp(resolution, "svga") == 0) return FRAMESIZE_SVGA;
+    if (strcmp(resolution, "xga") == 0) return FRAMESIZE_XGA;
+    if (strcmp(resolution, "hd") == 0) return FRAMESIZE_HD;
+    if (strcmp(resolution, "sxga") == 0) return FRAMESIZE_SXGA;
+    if (strcmp(resolution, "uxga") == 0) return FRAMESIZE_UXGA;
     return FRAMESIZE_VGA;
 }
 
@@ -357,9 +370,7 @@ static esp_err_t config_handler(httpd_req_t *req)
           (strlen(new_admin_key->valuestring) < 8 || strlen(new_admin_key->valuestring) > 16)))) ||
         strlen(ssid->valuestring) > 32 || strlen(password->valuestring) > 63 ||
         (password->valuestring[0] && strlen(password->valuestring) < 8) ||
-        (strcmp(resolution->valuestring, "qvga") != 0 &&
-         strcmp(resolution->valuestring, "vga") != 0 &&
-         strcmp(resolution->valuestring, "svga") != 0) ||
+        !resolution_supported(resolution->valuestring) ||
         quality->valuedouble < 8 || quality->valuedouble > 30 ||
         quality->valuedouble != quality->valueint) {
         cJSON_Delete(json);
