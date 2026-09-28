@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ESPV 摄像头</title>
+  <style>
+    :root{color-scheme:dark;font-family:system-ui,sans-serif;background:#111827;color:#f3f4f6}
+    *{box-sizing:border-box}body{margin:0;padding:24px;max-width:760px;margin-inline:auto}
+    h1{font-size:1.5rem;margin:0 0 8px}p{color:#aeb7c6;line-height:1.5}
+    section{background:#1f2937;border:1px solid #374151;border-radius:12px;padding:18px;margin:18px 0}
+    label{display:block;margin:14px 0 5px;font-weight:600}input,select,button{font:inherit}
+    input:not([type=checkbox]),select{width:100%;padding:10px;background:#111827;color:#fff;border:1px solid #4b5563;border-radius:7px}
+    input[type=checkbox]{width:18px;height:18px;vertical-align:middle;margin-right:8px}
+    button{border:0;border-radius:7px;padding:10px 16px;background:#10b981;color:#071b15;font-weight:700;cursor:pointer}
+    button.secondary{background:#374151;color:#f3f4f6}button:disabled{opacity:.5;cursor:wait}
+    .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.row>*{flex:1}
+    .check{font-weight:400}.muted{color:#9ca3af;font-size:.92rem}
+    code{color:#93c5fd;overflow-wrap:anywhere}a{color:#93c5fd}
+    #preview{display:none;width:100%;height:auto;background:#000;border-radius:8px;margin-top:12px}
+    #message{min-height:1.5em;color:#fbbf24}
+  </style>
+</head>
+<body>
+  <h1>ESPV 摄像头</h1>
+  <p>轻量配置与 MJPEG 视频源</p>
+  <section>
+    <strong>设备状态</strong>
+    <p id="status">正在读取…</p>
+    <p>视频地址：<a id="streamLink" href="#" target="_blank" rel="noopener"></a></p>
+    <p class="muted">Frigate 使用此地址。设备一次只提供一条视频连接；Frigate 占用时请在 Frigate 中看画面。</p>
+    <button class="secondary" id="previewButton" type="button">打开本页预览</button>
+    <img id="preview" alt="摄像头视频">
+  </section>
+  <section>
+    <form id="configForm">
+      <strong>设置</strong>
+      <label for="ssid">2.4 GHz Wi‑Fi 名称</label>
+      <input id="ssid" maxlength="32" autocomplete="off" placeholder="留空则使用配置热点">
+      <label for="wifiPassword">Wi‑Fi 密码</label>
+      <input id="wifiPassword" type="password" maxlength="64" autocomplete="new-password" placeholder="留空则保留当前密码">
+      <p class="muted">更换 Wi‑Fi 名称时，密码留空表示连接开放网络。</p>
+      <label for="adminPassword">新的管理 / 配置热点密码</label>
+      <input id="adminPassword" type="password" minlength="8" maxlength="16" autocomplete="new-password" placeholder="留空则保持当前密码">
+      <p class="muted">新刷机默认密码为 <code>ESPVsetup123</code>，可用于连接配置热点及保存设置。首次配置后建议修改；旧设备已保存的密码不受更新影响。</p>
+      <div class="row">
+        <div><label for="resolution">分辨率</label><select id="resolution"><option value="qvga">QVGA 320×240（帧率优先）</option><option value="vga">VGA 640×480（推荐）</option><option value="svga">SVGA 800×600（细节优先）</option></select></div>
+        <div><label for="quality">JPEG 质量：<span id="qualityValue">14</span></label><input id="quality" type="range" min="8" max="30" value="14"></div>
+      </div>
+      <p class="muted">JPEG 数值越小，画质越高，数据量也可能越大。</p>
+      <label class="check"><input id="mirror" type="checkbox">水平镜像</label>
+      <label class="check"><input id="flip" type="checkbox">上下翻转</label>
+      <p><button id="saveButton" type="submit">保存并重启</button></p>
+      <p id="message" role="status"></p>
+    </form>
+  </section>
+  <script>
+    const $ = id => document.getElementById(id);
+    const streamUrl = `${location.protocol}//${location.hostname}:81/stream`;
+    $('streamLink').href = streamUrl;
+    $('streamLink').textContent = streamUrl;
+    $('quality').oninput = () => $('qualityValue').textContent = $('quality').value;
+    let initial = true;
+    async function refresh() {
+      try {
+        const response = await fetch('/api/status', {cache:'no-store'});
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const s = await response.json();
+        $('status').textContent = `${s.connected ? '已连接 Wi‑Fi' : s.ap ? '配置热点运行中' : '正在连接 Wi‑Fi'} · IP ${s.ip}${s.rssi === undefined ? '' : ' · 信号 ' + s.rssi + ' dBm'} · 摄像头${s.camera ? '正常' : '故障'} · ${s.stream_active ? '正在传输 ' + s.fps + ' FPS' : '视频空闲'}`;
+        if (initial) {
+          $('ssid').value = s.ssid;
+          $('resolution').value = s.resolution;
+          $('quality').value = s.quality;
+          $('qualityValue').textContent = s.quality;
+          $('mirror').checked = s.mirror;
+          $('flip').checked = s.flip;
+          initial = false;
+        }
+      } catch (e) { $('status').textContent = '无法读取设备状态：' + e.message; }
+    }
+    $('previewButton').onclick = () => {
+      const image = $('preview');
+      if (image.style.display === 'block') {
+        image.src = '';
+        image.style.display = 'none';
+        $('previewButton').textContent = '打开本页预览';
+      } else {
+        image.src = streamUrl;
+        image.style.display = 'block';
+        $('previewButton').textContent = '关闭本页预览';
+      }
+    };
+    $('configForm').onsubmit = async event => {
+      event.preventDefault();
+      let key = sessionStorage.getItem('espv-key') || prompt('请输入当前管理密码（新刷机默认 ESPVsetup123；旧设备看串口日志）');
+      if (!key) return;
+      const data = {
+        ssid: $('ssid').value,
+        wifi_password: $('wifiPassword').value,
+        new_admin_key: $('adminPassword').value,
+        resolution: $('resolution').value,
+        quality: Number($('quality').value),
+        mirror: $('mirror').checked,
+        flip: $('flip').checked
+      };
+      $('saveButton').disabled = true;
+      $('message').textContent = '正在保存…';
+      try {
+        const response = await fetch('/api/config', {
+          method:'POST', headers:{'Content-Type':'application/json','X-Config-Key':key},
+          body:JSON.stringify(data)
+        });
+        if (response.status === 403) {
+          sessionStorage.removeItem('espv-key');
+          throw new Error('配置密码错误，请重新输入');
+        }
+        if (!response.ok) throw new Error('保存失败：HTTP ' + response.status);
+        sessionStorage.setItem('espv-key', data.new_admin_key || key);
+        $('wifiPassword').value = '';
+        $('adminPassword').value = '';
+        $('message').textContent = '已保存，设备即将重启。若修改了 Wi‑Fi 或热点密码，请使用新设置重新连接。';
+      } catch (e) {
+        $('message').textContent = e.message;
+      } finally { $('saveButton').disabled = false; }
+    };
+    refresh();
+    setInterval(refresh, 2000);
+  </script>
+</body>
+</html>
